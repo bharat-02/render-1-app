@@ -1,17 +1,16 @@
-# 🎓 Student Exam Performance Predictor
+🎓 Student Exam Performance Predictor
 
-<p align="center">
-  <b>Machine Learning Web Application for Predicting Student Mathematics Performance</b>
-</p>
+<p align="center"> <b>Machine Learning Web Application for Predicting Student Mathematics Performance</b> </p>
 
-<p align="center">
-  <a href="https://github.com/bharat-02/render-1-app">
-    <img src="https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github" alt="GitHub">
-  </a>
-  <img src="https://img.shields.io/badge/Python-3.x-blue?style=for-the-badge&logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/Flask-Web%20App-lightgrey?style=for-the-badge&logo=flask" alt="Flask">
-  <img src="https://img.shields.io/badge/Machine%20Learning-Scikit--Learn-orange?style=for-the-badge" alt="Machine Learning">
-</p>
+<p align="center"> <a href="https://github.com/bharat-02/render-1-app"> <img src="https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github" alt="GitHub"> </a> <a href="https://render-1-app.onrender.com"> <img src="https://img.shields.io/badge/Live-Demo-success?style=for-the-badge&logo=render" alt="Live Demo"> </a> <img src="https://img.shields.io/badge/Python-3.10-blue?style=for-the-badge&logo=python" alt="Python"> <img src="https://img.shields.io/badge/Flask-Web%20App-black?style=for-the-badge&logo=flask" alt="Flask"> <img src="https://img.shields.io/badge/Machine%20Learning-Scikit--Learn-orange?style=for-the-badge&logo=scikit-learn" alt="Machine Learning"> </p>
+
+🚀 Live Demo
+
+🌐 Try the application online:
+
+👉 https://render-1-app.onrender.com
+
+The application allows users to enter student-related information and receive a predicted mathematics exam performance through a machine learning model.
 
 ---
 

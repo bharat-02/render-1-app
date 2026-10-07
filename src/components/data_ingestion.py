@@ -8,9 +8,7 @@ from sklearn.model_selection import train_test_split
 from dataclasses import dataclass
 
 from src.components.data_transformation import DataTransformation
-from src.components.data_transformation import DataTransformationConfig
 
-from src.components.model_trainer import ModelTrainerConfig
 from src.components.model_trainer import ModelTrainer
 @dataclass
 class DataIngestionConfig:
@@ -25,8 +23,21 @@ class DataIngestion:
     def initiate_data_ingestion(self):
         logging.info("Entered the data ingestion method or component")
         try:
-            df=pd.read_csv('notebook\data\stud.csv')
-            logging.info('Read the dataset as dataframe')
+            candidates = [
+                os.path.join("notebook", "data", "stud.csv"),
+                os.path.join("artifacts", "data.csv"),
+                self.ingestion_config.raw_data_path,
+            ]
+            df = None
+            for p in candidates:
+                if os.path.exists(p):
+                    df = pd.read_csv(p)
+                    logging.info(f'Read the dataset as dataframe from {p}')
+                    break
+            if df is None:
+                raise FileNotFoundError(
+                    f"Dataset not found. Tried: {candidates}"
+                )
 
             os.makedirs(os.path.dirname(self.ingestion_config.train_data_path),exist_ok=True)
 

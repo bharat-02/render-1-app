@@ -8,9 +8,8 @@ from sklearn.ensemble import (
     GradientBoostingRegressor,
     RandomForestRegressor,
 )
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import r2_score
-from sklearn.neighbors import KNeighborsRegressor
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 from sklearn.tree import DecisionTreeRegressor
 from xgboost import XGBRegressor
 
@@ -38,57 +37,69 @@ class ModelTrainer:
                 test_array[:,-1]
             )
             models = {
-                "Random Forest": RandomForestRegressor(),
-                "Decision Tree": DecisionTreeRegressor(),
-                "Gradient Boosting": GradientBoostingRegressor(),
+                "Random Forest": RandomForestRegressor(random_state=42),
+                "Decision Tree": DecisionTreeRegressor(random_state=42),
+                "Gradient Boosting": GradientBoostingRegressor(random_state=42),
                 "Linear Regression": LinearRegression(),
-                "XGBRegressor": XGBRegressor(),
-                "CatBoosting Regressor": CatBoostRegressor(verbose=False),
-                "AdaBoost Regressor": AdaBoostRegressor(),
+                "Ridge": Ridge(random_state=42),
+                "Lasso": Lasso(random_state=42, max_iter=20000),
+                "ElasticNet": ElasticNet(random_state=42, max_iter=20000),
+                "XGBRegressor": XGBRegressor(random_state=42, verbosity=0),
+                "CatBoosting Regressor": CatBoostRegressor(verbose=False, random_seed=42, allow_writing_files=False),
+                "AdaBoost Regressor": AdaBoostRegressor(random_state=42),
             }
             params={
                 "Decision Tree": {
-                    'criterion':['squared_error', 'friedman_mse', 'absolute_error', 'poisson'],
-                    # 'splitter':['best','random'],
-                    # 'max_features':['sqrt','log2'],
+                    'criterion':['squared_error', 'absolute_error', 'poisson'],
+                    'max_depth':[None, 5, 10],
                 },
                 "Random Forest":{
-                    # 'criterion':['squared_error', 'friedman_mse', 'absolute_error', 'poisson'],
-                 
-                    # 'max_features':['sqrt','log2',None],
-                    'n_estimators': [8,16,32,64,128,256]
+                    'n_estimators': [100, 200],
+                    'max_depth': [None, 10],
+                    'min_samples_split': [2, 5],
                 },
                 "Gradient Boosting":{
-                    # 'loss':['squared_error', 'huber', 'absolute_error', 'quantile'],
-                    'learning_rate':[.1,.01,.05,.001],
-                    'subsample':[0.6,0.7,0.75,0.8,0.85,0.9],
-                    # 'criterion':['squared_error', 'friedman_mse'],
-                    # 'max_features':['auto','sqrt','log2'],
-                    'n_estimators': [8,16,32,64,128,256]
+                    'learning_rate':[.05,.1],
+                    'subsample':[0.8, 1.0],
+                    'n_estimators': [100, 200],
+                    'max_depth':[2, 3],
                 },
                 "Linear Regression":{},
+                "Ridge":{
+                    'alpha': [0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 10.0],
+                },
+                "Lasso":{
+                    'alpha': [0.005, 0.01, 0.05],
+                },
+                "ElasticNet":{
+                    'alpha': [0.005, 0.01],
+                    'l1_ratio': [0.5, 0.8],
+                },
                 "XGBRegressor":{
-                    'learning_rate':[.1,.01,.05,.001],
-                    'n_estimators': [8,16,32,64,128,256]
+                    'learning_rate':[.05,.1],
+                    'n_estimators': [100, 200],
+                    'max_depth': [3, 5],
+                    'subsample': [0.8, 1.0],
                 },
                 "CatBoosting Regressor":{
-                    'depth': [6,8,10],
-                    'learning_rate': [0.01, 0.05, 0.1],
-                    'iterations': [30, 50, 100]
+                    'depth': [4, 6],
+                    'learning_rate': [0.05, 0.1],
+                    'iterations': [100, 200]
                 },
                 "AdaBoost Regressor":{
-                    'learning_rate':[.1,.01,0.5,.001],
-                    # 'loss':['linear','square','exponential'],
-                    'n_estimators': [8,16,32,64,128,256]
+                    'learning_rate':[.05, .1, 0.5],
+                    'n_estimators': [100, 200]
                 }
                 
             }
 
-            model_report:dict=evaluate_models(X_train=X_train,y_train=y_train,X_test=X_test,y_test=y_test,
-                                             models=models,param=params)
+            model_report, model_details = evaluate_models(
+                X_train=X_train, y_train=y_train, X_test=X_test, y_test=y_test,
+                models=models, param=params)
             
-            ## To get best model score from dict
-            best_model_score = max(sorted(model_report.values()))
+            ## Best model is selected on CV R2 (not test R2) to avoid
+            ## optimistic bias from test-set model selection.
+            best_model_score = max(model_report.values())
 
             ## To get best model name from dict
 
@@ -98,8 +109,8 @@ class ModelTrainer:
             best_model = models[best_model_name]
 
             if best_model_score<0.6:
-                raise CustomException("No best model found")
-            logging.info(f"Best found model on both training and testing dataset")
+                raise CustomException("No best model found", sys)
+            logging.info(f"Best model by CV R2: {best_model_name} ({best_model_score:.4f})")
 
             save_object(
                 file_path=self.model_trainer_config.trained_model_file_path,
@@ -109,6 +120,12 @@ class ModelTrainer:
             predicted=best_model.predict(X_test)
 
             r2_square = r2_score(y_test, predicted)
+            mae = mean_absolute_error(y_test, predicted)
+            rmse = float((mean_squared_error(y_test, predicted)) ** 0.5)
+            logging.info(
+                f"Final {best_model_name}: test R2={r2_square:.4f} "
+                f"MAE={mae:.4f} RMSE={rmse:.4f}"
+            )
             return r2_square
             
 

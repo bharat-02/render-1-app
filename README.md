@@ -2,7 +2,7 @@
 
 <p align="center"> <b>Machine Learning Web Application for Predicting Student Mathematics Performance</b> </p>
 
-<p align="center"> <a href="https://github.com/bharat-02/render-1-app"> <img src="https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github" alt="GitHub"> </a> <a href="https://render-1-app.onrender.com"> <img src="https://img.shields.io/badge/Live-Demo-success?style=for-the-badge&logo=render" alt="Live Demo"> </a> <img src="https://img.shields.io/badge/Python-3.10-blue?style=for-the-badge&logo=python" alt="Python"> <img src="https://img.shields.io/badge/Flask-Web%20App-black?style=for-the-badge&logo=flask" alt="Flask"> <img src="https://img.shields.io/badge/Machine%20Learning-Scikit--Learn-orange?style=for-the-badge&logo=scikit-learn" alt="Machine Learning"> </p>
+<p align="center"> <a href="https://github.com/bharat-02/render-1-app"> <img src="https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github" alt="GitHub"> </a> <a href="https://render-1-app.onrender.com"> <img src="https://img.shields.io/badge/Live-Demo-success?style=for-the-badge&logo=render" alt="Live Demo"> </a> <img src="https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python" alt="Python"> <img src="https://img.shields.io/badge/Flask-Web%20App-black?style=for-the-badge&logo=flask" alt="Flask"> <img src="https://img.shields.io/badge/Machine%20Learning-Scikit--Learn-orange?style=for-the-badge&logo=scikit-learn" alt="Machine Learning"> </p>
 
 🚀 Live Demo
 
@@ -58,13 +58,11 @@ The Flask application exposes a home page and a prediction endpoint and runs on 
 | 🚀 XGBoost      | Machine learning                 |
 | 🐼 Pandas       | Data manipulation                |
 | 🔢 NumPy        | Numerical computation            |
-| 📊 Matplotlib   | Data visualization               |
-| 📉 Seaborn      | Statistical visualization        |
 | 💾 Dill         | Model/object serialization       |
 | 🖥️ HTML/CSS    | Frontend interface               |
 | ⚡ Gunicorn      | Production WSGI server           |
 
-The repository's current `requirements.txt` includes Pandas, NumPy, Seaborn, Matplotlib, Scikit-learn, CatBoost, XGBoost, Flask, Dill, and Gunicorn.
+The repository's current `requirements.txt` includes Pandas, NumPy, Scikit-learn, CatBoost, XGBoost, Flask, Dill, and Gunicorn.
 
 ---
 
@@ -141,7 +139,11 @@ render-1-app/
 │   ├── index.html
 │   └── home.html
 │
+├── tests/
+│   └── test_app.py
+│
 ├── app.py
+├── train_final.py
 ├── requirements.txt
 ├── .gitignore
 ├── LICENSE
@@ -170,4 +172,44 @@ The trained model generates a predicted Mathematics Score.
 
 ### 5️⃣ Result
 
-The prediction is displayed on the web page with th
+The prediction is displayed on the web page with the predicted Mathematics Score (clipped to 0–100).
+
+---
+
+## 🧪 ML Results (measured, Python 3.11 + scikit-learn 1.9.1)
+
+- **Problem type:** regression. Target `math_score` (0–100). 1000 rows: 2 numeric (`reading_score`, `writing_score`) + 5 categoricals. No missing values, no duplicates.
+- **Preprocessing:** `ColumnTransformer` — numeric median imputation + `StandardScaler`; categorical most-frequent imputation + `OneHotEncoder(handle_unknown="ignore")`. Fitted on train only (800/200 split, `random_state=42`).
+- **Models tested (same split/preprocessing, 5-fold CV):** LinearRegression, Ridge, Lasso, ElasticNet, Huber, DecisionTree, RandomForest, ExtraTrees, GradientBoosting, HistGradientBoosting, AdaBoost, XGBoost, CatBoost, LightGBM, KNN, SVR.
+- **Winner: ElasticNet (`alpha=0.005, l1_ratio=0.8`)** — best CV R² (0.8686); linear family beat all tree/boosting models on generalization with minimal training time.
+
+| Metric | Original (LinearRegression) | Final (ElasticNet) |
+|---|---:|---:|
+| Train R² | 0.8743 | 0.8743 |
+| CV R² | 0.8686 | 0.8686 |
+| Test R² | 0.8804 | 0.8807 |
+| MAE | 4.2148 | 4.2086 |
+| RMSE | 5.3940 | 5.3889 |
+
+- **GPU:** not used — 800×19 tabular data trains in seconds on CPU; GPU provides no benefit here.
+
+---
+
+## ▶️ Run locally
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python train_final.py   # retrain model + preprocessor into artifacts/
+python app.py           # serves on http://127.0.0.1:5000
+python -m unittest discover -s tests -v   # 6 tests
+```
+
+---
+
+## 🚀 Deployment (Render)
+
+- Production entry point: `gunicorn app:app` (`app.py` exposes both `application` and `app`).
+- Local entry point `python app.py` serves on port 5000; production port is provided by Gunicorn/Render.
+- `artifacts/model.pkl` + `artifacts/preprocessor.pkl` are committed so the app loads them at startup.

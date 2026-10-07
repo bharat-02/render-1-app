@@ -36,12 +36,16 @@ The Flask application exposes a home page and a prediction endpoint and runs on 
 
 ## ✨ Features
 
-* 🤖 Machine Learning based prediction
+* 🤖 ML-based Maths Score prediction
 * 🌐 Flask web interface
-* 📊 Student performance analysis
-* 🔄 Reusable preprocessing and prediction pipeline
+* 🎨 Pure HTML/CSS responsive frontend (no JavaScript, no UI frameworks)
 * 🧹 Data preprocessing and feature transformation
-* 📈 Multiple ML algorithms supported during model experimentation
+* 📈 Multiple ML model evaluation with cross-validation
+* 🏆 Final model selection by generalization performance
+* 🔄 Reusable preprocessing and prediction pipeline
+* ✅ HTML5 input validation (scores constrained to 0–100)
+* 📊 CSS-only score visualization on the result card
+* 🔒 Predicted score constrained to the valid 0–100 range
 * 🚀 Production-ready Flask serving with Gunicorn support
 * 📁 Modular project structure
 
@@ -67,6 +71,28 @@ The repository's current `requirements.txt` includes Pandas, NumPy, Scikit-learn
 ---
 
 ## 🧠 Machine Learning Workflow
+
+```text
+Dataset
+   ↓
+Data Preprocessing
+   ↓
+Feature Engineering
+   ↓
+Train/Validation
+   ↓
+Model Comparison
+   ↓
+Hyperparameter Tuning
+   ↓
+Best Model
+   ↓
+Prediction Pipeline
+   ↓
+Flask Application
+```
+
+The request-handling flow in detail:
 
 ```text
                  ┌─────────────────────┐
@@ -135,6 +161,10 @@ render-1-app/
 │   ├── logger.py
 │   └── utils.py
 │
+├── static/
+│   └── css/
+│       └── style.css
+│
 ├── templates/
 │   ├── index.html
 │   └── home.html
@@ -180,8 +210,41 @@ The prediction is displayed on the web page with the predicted Mathematics Score
 
 - **Problem type:** regression. Target `math_score` (0–100). 1000 rows: 2 numeric (`reading_score`, `writing_score`) + 5 categoricals. No missing values, no duplicates.
 - **Preprocessing:** `ColumnTransformer` — numeric median imputation + `StandardScaler`; categorical most-frequent imputation + `OneHotEncoder(handle_unknown="ignore")`. Fitted on train only (800/200 split, `random_state=42`).
-- **Models tested (same split/preprocessing, 5-fold CV):** LinearRegression, Ridge, Lasso, ElasticNet, Huber, DecisionTree, RandomForest, ExtraTrees, GradientBoosting, HistGradientBoosting, AdaBoost, XGBoost, CatBoost, LightGBM, KNN, SVR.
-- **Winner: ElasticNet (`alpha=0.005, l1_ratio=0.8`)** — best CV R² (0.8686); linear family beat all tree/boosting models on generalization with minimal training time.
+- **GPU:** not used — 800×19 tabular data trains in seconds on CPU; GPU provides no benefit here.
+
+### Models evaluated
+
+All models below were trained with the same split/preprocessing and tuned with
+`GridSearchCV` (5-fold CV). Model selection used the CV score; the test set was
+only used for the final unbiased evaluation.
+
+| Model | Validation (CV R²) | Test R² |
+|------|-------------------:|--------:|
+| ElasticNet | 0.8686 | 0.8807 |
+| Ridge | 0.8686 | 0.8806 |
+| Lasso | 0.8686 | 0.8806 |
+| Linear Regression | 0.8686 | 0.8804 |
+| CatBoost Regressor | 0.8590 | 0.8714 |
+| Gradient Boosting | 0.8528 | 0.8761 |
+| XGBoost | 0.8514 | 0.8679 |
+| Random Forest | 0.8384 | 0.8558 |
+| AdaBoost | 0.8224 | 0.8475 |
+| Decision Tree | 0.7944 | 0.8242 |
+
+A broader sweep (also trying ExtraTrees, HistGradientBoosting, LightGBM, KNN,
+SVR, Huber with default settings) confirmed the same ranking: the linear family
+(CV ≈ 0.869) generalizes best; tree ensembles overfit (e.g. Random Forest train
+R² 0.953 vs CV 0.838); KNN/SVR score below 0.79.
+
+### Best model
+
+- **Selected model:** ElasticNet (`alpha=0.005`, `l1_ratio=0.8`)
+- **Why:** highest CV R² (0.8686) — selection was based on validation, not test
+  or training score. It handles the strong reading/writing multicollinearity
+  (r = 0.956) via combined L1/L2 regularization, trains in milliseconds, and is
+  trivially deployable.
+- **Validation/CV:** R² 0.8686
+- **Test:** R² 0.8807, MAE 4.2086, RMSE 5.3889
 
 | Metric | Original (LinearRegression) | Final (ElasticNet) |
 |---|---:|---:|
@@ -191,18 +254,66 @@ The prediction is displayed on the web page with the predicted Mathematics Score
 | MAE | 4.2148 | 4.2086 |
 | RMSE | 5.3940 | 5.3889 |
 
-- **GPU:** not used — 800×19 tabular data trains in seconds on CPU; GPU provides no benefit here.
+### Prediction range
+
+The final displayed Maths Score is constrained to **0–100**. Regression models
+are not mathematically bounded, so a few inputs (e.g. perfect 100/100 scores)
+can produce raw predictions slightly above 100. The application therefore
+enforces the valid domain at the prediction boundary in `app.py`:
+
+```python
+prediction = max(0.0, min(100.0, prediction))
+```
 
 ---
 
 ## ▶️ Run locally
 
+### Installation (Windows)
+
+```bash
+git clone https://github.com/bharat-02/render-1-app.git
+cd render-1-app
+```
+
+Create and activate a virtual environment (Windows CMD):
+
 ```bash
 python -m venv venv
 venv\Scripts\activate
+```
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
+
+### Start the app
+
+```bash
 python train_final.py   # retrain model + preprocessor into artifacts/
 python app.py           # serves on http://127.0.0.1:5000
+```
+
+Open `http://127.0.0.1:5000` in a browser (the Flask console also shows the URL).
+
+### Prediction usage
+
+1. Open the prediction page (`Predict` in the nav bar, or `/predictdata`).
+2. Select gender, race/ethnicity, parental education, lunch type, and test preparation course.
+3. Enter the Reading Score (0–100).
+4. Enter the Writing Score (0–100).
+5. Click **Predict Maths Score**.
+6. View the predicted Maths Score card (value out of 100 with a score bar).
+
+### Testing
+
+Tests live in `tests/` and use only the standard library (`unittest`, no extra
+dependencies). They cover artifact loading, the prediction pipeline (valid
+range, unseen categories), and the Flask routes including a form POST:
+
+```bash
 python -m unittest discover -s tests -v   # 6 tests
 ```
 

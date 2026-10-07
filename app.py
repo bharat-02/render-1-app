@@ -75,7 +75,7 @@ def predict_datapoint():
         prediction = float(results[0])
 
         # Keep prediction between 0 and 100
-        prediction = max(0.0, min(100.0, prediction))
+        # prediction = max(0.0, min(100.0, prediction))
 
         print("Predicted Maths Score:", prediction)
 

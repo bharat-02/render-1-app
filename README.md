@@ -215,55 +215,67 @@ The prediction is displayed on the web page with the predicted Mathematics Score
 ### Models evaluated
 
 All models below were trained with the same split/preprocessing and tuned with
-`GridSearchCV` (5-fold CV). Model selection used the CV score; the test set was
-only used for the final unbiased evaluation.
+`GridSearchCV` (5-fold CV, selected on CV — never the test set). Boundary counts
+are measured on the 200 test predictions.
 
-| Model | Validation (CV R²) | Test R² |
-|------|-------------------:|--------:|
-| ElasticNet | 0.8686 | 0.8807 |
-| Ridge | 0.8686 | 0.8806 |
-| Lasso | 0.8686 | 0.8806 |
-| Linear Regression | 0.8686 | 0.8804 |
-| CatBoost Regressor | 0.8590 | 0.8714 |
-| Gradient Boosting | 0.8528 | 0.8761 |
-| XGBoost | 0.8514 | 0.8679 |
-| Random Forest | 0.8384 | 0.8558 |
-| AdaBoost | 0.8224 | 0.8475 |
-| Decision Tree | 0.7944 | 0.8242 |
+| Model | Validation (CV R²) | Test R² | MAE | Min pred | Max pred | < 0 | > 100 |
+|------|-------------------:|--------:|----:|---------:|---------:|----:|------:|
+| CatBoost | 0.8590 | 0.8714 | 4.2755 | 17.93 | 92.21 | 0 | 0 |
+| Gradient Boosting | 0.8537 | 0.8771 | 4.2469 | 13.61 | 93.96 | 0 | 0 |
+| XGBoost | 0.8514 | 0.8679 | 4.3541 | 18.25 | 93.42 | 0 | 0 |
+| Hist Gradient Boosting | 0.8452 | 0.8523 | 4.4682 | 27.15 | 94.39 | 0 | 0 |
+| Random Forest | 0.8384 | 0.8558 | 4.5797 | 18.16 | 93.31 | 0 | 0 |
+| Extra Trees | 0.8356 | 0.8505 | 4.6223 | 20.94 | 92.77 | 0 | 0 |
+| AdaBoost | 0.8224 | 0.8475 | 4.7708 | 19.29 | 90.51 | 0 | 0 |
+| Decision Tree | 0.7944 | 0.8242 | 4.9315 | 18.25 | 96.33 | 0 | 0 |
 
-A broader sweep (also trying ExtraTrees, HistGradientBoosting, LightGBM, KNN,
-SVR, Huber with default settings) confirmed the same ranking: the linear family
-(CV ≈ 0.869) generalizes best; tree ensembles overfit (e.g. Random Forest train
-R² 0.953 vs CV 0.838); KNN/SVR score below 0.79.
+For reference (disqualified, see below): LinearRegression CV 0.8686 / test
+0.8804, Ridge 0.8686/0.8806, Lasso 0.8686/0.8806, ElasticNet 0.8686/0.8807 —
+marginally higher CV but structurally unbounded (raw −6.42 at reading/writing
+0/0). A broader sweep (Huber, KNN, SVR, LightGBM) confirmed tree ensembles as
+the only family that is both competitive and domain-valid.
+
+### Root cause of the invalid predictions
+
+The previous model (ElasticNet) is an **unbounded affine function**
+(`prediction = intercept + coef · features`). On below-support inputs — e.g.
+reading/writing scores under the training minima (24/15) — the standardized
+features become large-negative z-scores (−4.5/−4.8 at 0/0) and the prediction
+extrapolates outside the target domain (measured **−6.42 at 0/0**). This is
+mathematics, not a data or pipeline bug: no leakage, wrong columns, or stale
+artifacts were found. The fix is a model family whose predictions derive from
+observed training targets (tree ensembles) — not app-level clipping.
 
 ### Best model
 
-- **Selected model:** ElasticNet (`alpha=0.005`, `l1_ratio=0.8`)
-- **Why:** highest CV R² (0.8686) — selection was based on validation, not test
-  or training score. It handles the strong reading/writing multicollinearity
-  (r = 0.956) via combined L1/L2 regularization, trains in milliseconds, and is
-  trivially deployable.
-- **Validation/CV:** R² 0.8686
-- **Test:** R² 0.8807, MAE 4.2086, RMSE 5.3889
+- **Selected model:** CatBoost (`depth=4`, `learning_rate=0.05`, `iterations=200`, `l2_leaf_reg=3`)
+- **Why:** best CV R² (0.8590) among the naturally bounded tree-ensemble family,
+  stable folds (±0.0098), lowest ensemble MAE (4.2755), and valid boundaries on
+  test predictions and on extreme probe inputs (0/0 → 16.20).
+- **Validation/CV:** R² 0.8590
+- **Test:** R² 0.8714, MAE 4.2755, RMSE 5.5945
+- **Boundaries:** test min 17.93 / max 92.21, 0 below 0, 0 above 100. One honest
+  footnote: a single training prediction reaches 101.67 (boosting sums can
+  marginally overshoot the training max); the below-zero failure mode is
+  structurally eliminated everywhere (train min 14.68, all probes ≥ 16.20).
 
-| Metric | Original (LinearRegression) | Final (ElasticNet) |
+| Metric | Before (ElasticNet) | After (CatBoost) |
 |---|---:|---:|
-| Train R² | 0.8743 | 0.8743 |
-| CV R² | 0.8686 | 0.8686 |
-| Test R² | 0.8804 | 0.8807 |
-| MAE | 4.2148 | 4.2086 |
-| RMSE | 5.3940 | 5.3889 |
+| Train R² | 0.8743 | 0.8883 |
+| CV R² | 0.8686 | 0.8590 |
+| Test R² | 0.8807 | 0.8714 |
+| Test MAE | 4.2086 | 4.2755 |
+| Test RMSE | 5.3889 | 5.5945 |
+| Test invalid predictions | 0 (in-distribution) | 0 |
+| Extreme-input (0/0) prediction | −6.42 (invalid) | 16.20 (valid) |
 
 ### Prediction range
 
-The final displayed Maths Score is constrained to **0–100**. Regression models
-are not mathematically bounded, so a few inputs (e.g. perfect 100/100 scores)
-can produce raw predictions slightly above 100. The application therefore
-enforces the valid domain at the prediction boundary in `app.py`:
-
-```python
-prediction = max(0.0, min(100.0, prediction))
-```
+The displayed Maths Score comes **directly from the model — `app.py` performs
+no clipping or range modification** (only `f"{prediction:.2f}"` formatting).
+Validity is a property of the selected model family: its predictions derive
+from observed training targets, so unlike the previous affine model it does
+not extrapolate below zero on low-score inputs.
 
 ---
 

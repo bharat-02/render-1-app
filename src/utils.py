@@ -57,13 +57,19 @@ def evaluate_models(X_train, y_train,X_test,y_test,models,param):
                 "test_r2": float(test_r2),
                 "test_mae": float(test_mae),
                 "test_rmse": float(test_rmse),
+                "test_min": float(np.min(y_test_pred)),
+                "test_max": float(np.max(y_test_pred)),
+                "test_below_0": int(np.sum(y_test_pred < 0)),
+                "test_above_100": int(np.sum(y_test_pred > 100)),
                 "estimator": best,
             }
             print(
                 f"{name}: best={gs.best_params_} "
                 f"train_R2={train_r2:.4f} "
                 f"CV_R2={cv_scores.mean():.4f}+-{cv_scores.std():.4f} "
-                f"test_R2={test_r2:.4f} MAE={test_mae:.4f} RMSE={test_rmse:.4f}"
+                f"test_R2={test_r2:.4f} MAE={test_mae:.4f} RMSE={test_rmse:.4f} "
+                f"min={np.min(y_test_pred):.2f} max={np.max(y_test_pred):.2f} "
+                f"<0={np.sum(y_test_pred < 0)} >100={np.sum(y_test_pred > 100)}"
             )
 
             # Keep the fitted best estimator for later saving

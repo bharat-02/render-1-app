@@ -19,7 +19,28 @@ class TestArtifacts(unittest.TestCase):
         self.assertTrue(hasattr(model, "predict"))
         self.assertTrue(hasattr(pre, "transform"))
 
-    def test_prediction_valid_range(self):
+    def test_prediction_boundaries_no_clipping(self):
+        # The saved model itself must produce in-domain predictions.
+        # No clipping is applied anywhere in this path.
+        from src.pipeline.predict_pipeline import CustomData, PredictPipeline
+        pipe = PredictPipeline()
+        base = dict(
+            gender="female",
+            race_ethnicity="group B",
+            parental_level_of_education="some high school",
+            lunch="free/reduced",
+            test_preparation_course="none",
+        )
+        for reading, writing in [(0, 0), (50, 50), (90, 95), (100, 100)]:
+            with self.subTest(reading=reading, writing=writing):
+                data = CustomData(
+                    reading_score=reading, writing_score=writing, **base
+                )
+                raw = float(pipe.predict(data.get_data_as_data_frame())[0])
+                self.assertGreaterEqual(raw, 0.0)
+                self.assertLessEqual(raw, 100.0)
+
+    def test_typical_prediction_sensible(self):
         from src.pipeline.predict_pipeline import CustomData, PredictPipeline
         data = CustomData(
             gender="female",
@@ -30,11 +51,9 @@ class TestArtifacts(unittest.TestCase):
             reading_score=72,
             writing_score=74,
         )
-        preds = PredictPipeline().predict(data.get_data_as_data_frame())
-        self.assertEqual(len(preds), 1)
-        self.assertFalse(bool(__import__("math").isnan(float(preds[0]))))
-        self.assertGreaterEqual(max(0.0, min(100.0, float(preds[0]))), 0.0)
-        self.assertLessEqual(max(0.0, min(100.0, float(preds[0]))), 100.0)
+        raw = float(PredictPipeline().predict(data.get_data_as_data_frame())[0])
+        self.assertGreaterEqual(raw, 0.0)
+        self.assertLessEqual(raw, 100.0)
 
     def test_unseen_category_does_not_crash(self):
         from src.pipeline.predict_pipeline import CustomData, PredictPipeline
